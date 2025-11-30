@@ -81,7 +81,7 @@ const UserSchema = new Schema<IUser, Model<IUser>>({
     },
     enableAiAnalysis: {
         type: Boolean,
-        default: false,
+        default: true,
     }
 }, { timestamps: true });
 
