@@ -1,0 +1,330 @@
+name: resp-ai-api
+description: AI-powered API analysis backend service that provides intelligent insights into HTTP responses, status codes, and error diagnostics. Processes API endpoints to deliver actionable explanations and debugging recommendations
+version: 1
+
+# Database models
+models:
+  {
+    User:
+      {
+        _id: ObjectId,
+        fullname: { type: string, trim: true, minLength: 2, maxLength: 50, required: true },
+        email: { type: string, trim: true, unique: true, lowercase: true },
+        password: { type: string, default: null },
+        oAuthProviders: {
+          type: [
+            { provider: string, id: string },
+          ],
+          default: [],
+        },
+        avatar: string,
+        credits: { type: number, default: 100 },
+        plan: { type: string, enum: ["starter", "pro", "enterprise"], default: "starter" },
+        role: { type: string, enum: ["admin", "user", "creator"], default: "user" },
+        creditRefillDate: { type: Date, required: true },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    
+    AnalysisDetail:
+      {
+        _id: ObjectId,
+        user: { type: ObjectId, ref: User, required: true, trim: true },
+        endpoint: { type: string, trim: true, required: true },
+        method: { type: string, enum: ["GET", "POST", "PUT", "PATCH", "DELETE"], required: true, trim: true },
+        status: { type: number, required: true },
+        aiSummary: { type: string, required: true, trim: true },
+        cost: number,
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now },
+      },
+
+    RateLimitIp: {
+      _id: ObjectId,
+      ip: string,
+      windowStart: Date,
+      count: number
+    },
+
+    RateLimitUser: {
+      _id: ObjectId,
+      userId: ObjectId,
+      windowStart: Date,
+      count: number
+    }
+  },
+
+# REST Api design
+apiResponseStructure: {
+  success: boolean,
+  message: string,
+  data: unknown or undefined,
+  error: {
+    code: string,
+    statusCode: number,
+    details: unknown,
+  }, # Optional field
+},
+
+endpoints: {
+  baseUrl: http://localhost:4000,
+  authentication: [
+    { 
+      resource: /api/v1/auth/signup,
+      method: POST,
+      headers: {},
+      queryParams: [],
+      params: [],
+      body: {
+        firstname: string,
+        lastname: string,
+        email: string,
+        password: string,
+      },
+      purpose: Creates a new account for a user,
+    },
+
+    {
+      resource: /api/v1/auth/google,
+      method: GET,
+      headers: {},
+      queryParams: [],
+      params: [],
+      body: {},
+      purpose: Used to get users details with google as provider,
+    },
+
+    {
+      resource: /auth/google/callback,
+      method: GET,
+      headers: {},
+      queryParams: [],
+      params: [],
+      body: {},
+      purpose: After successfull google authentication google routes users back here and we return a success response and create a token for the user,
+    },
+
+    { 
+      resource: /api/v1/auth/login,
+      method: POST,
+      headers: {},
+      queryParams: [],
+      params: [],
+      body: {
+        email: string,
+        password: string,
+      },
+      purpose: Logs a user into their already existing account
+    },
+    { 
+      resource: /api/v1/auth/logout,
+      method: POST,
+      headers: {
+        Authorization: string
+      },
+      queryParams: [],
+      params: [],
+      body: {},
+      purpose: Logs a user out of their already exisiting account
+    },
+    { 
+      resource: /api/v1/auth/refresh,
+      method: GET,
+      queryParams: [],
+      params: [],
+      headers: {
+        x-refresh-token: string
+      },
+      body: {},
+      purpose: Refreshes a user's expired access token using a refresh token
+    },
+    { 
+      resource: /api/v1/auth/me,
+      method: GET,
+      queryParams: [],
+      params: [],
+      headers: {
+        Authorization: string,
+      },
+      body: {},
+      purpose: Returns a user's auth payload (partial data about the user and related to authentication)
+    },
+  ],
+
+  responseAnalysis: [
+    { 
+      resource: /api/v1/response/analysis,
+      method: POST,
+      queryParams: [],
+      params: [],
+      headers: {
+        Authorization: string,
+      },
+      body: {
+        endpoint: string,
+        method: GET or POST or PUT or PATCH or DELETE,
+        headers: Array, 
+        queryParams: Array,
+        body: Array,
+      },
+      purpose: Analyses a response after fetching data from a requested endpoint
+    },
+    {
+      resource: /api/v1/response/analysis,
+      method: GET,
+      queryParams: [
+        { name: page, type: string, purpose: To return analysis in chunks/paginated format },
+        { name: method, type: string, purpose: Filters the data chunk to return documents in which their request.method field matches the method provided },
+        { name: status, type: number, purpose: Filters the data chunk to return documents in which their response.status field matches the status provided},
+        { name: searchQuery, type: string, purpose: Filters the data chunk to return documents in which all previously stated filters matches the matching document field }
+      ],
+      params: [],
+      headers: {
+        Authorization: string,
+      },
+      body: {},
+      purpose: Returns all past analysis,
+    },
+    {
+      resource: /api/v1/response/analysis/:id,
+      method: DELETE,
+      queryParams: [],
+      params: [
+        { name: id, type: string, purpose: Used to identify the specific analysis a user wishes to delete }
+      ],
+      headers: {
+        Authorization: string,
+      },
+      body: {},
+      purpose: Deletes a past analysis,
+    },
+    {
+      resource: /api/v1/response/analysis/:id,
+      method: GET,
+      queryParams: [],
+      params: [
+        { name: id, type: string, purpose: Used to identify the specific analysis a user wishes to view }
+      ],
+      headers: {
+        Authorization: string,
+      },
+      body: {},
+      purpose: Shows details about a specific analysis,
+    },
+    { 
+      resource: /api/v1/response/analysis/save,
+      method: POST,
+      queryParams: [],
+      params: [],
+      headers: {
+        Authorization: string,
+      },
+      body: {
+        request: {
+          endpoint: string,
+          method: GET or POST or PUT or PATCH or DELETE,
+          headers: Array, 
+          queryParams: Array,
+          body: JSON string or null,
+        },
+        response: {
+          status: number,
+          headers: Array,
+          body: JSON string,
+        },
+        aiSummary: string,
+        cost: number,
+      },
+      purpose: Analyses a response after fetching data from a requested endpoint
+    },
+
+    { 
+      resource: /api/v1/response/analysis/ai,
+      method: PATCH,
+      queryParams: [],
+      params: [],
+      headers: {
+        Authorization: string,
+      },
+      body: {},
+      purpose: Sets if a user wants to disable or enable ai analysis for requests
+    },
+  ],
+
+  profile: [
+    { 
+      resource: /api/v1/profile/me,
+      method: GET,
+      queryParams: [],
+      params: [],
+      headers: {
+        Authorization: string
+      },
+      body: {},
+      purpose: Returns the requesting user's profile
+    },
+
+    { 
+      resource: /api/v1/profile/me,
+      method: PATCH,
+      queryParams: [],
+      params: [],
+      headers: {
+        Authorization: string
+      },
+      body: {
+        firstname: string | undefined,
+        lastname: string | undefined,
+        avatar: string | undefined (File in the future),
+      },
+      purpose: Edit's the requesting users profile
+    },
+  ],
+},
+
+middlewares: [
+  {
+    name: verifyAccessToken,
+    purpose: Verifies the requesting user's access token before allowing access to endpoints that require authentication
+  },
+  {
+    name: verifyRefreshToken,
+    purpose: Verifies the requesting user's refresh token before allowing the user to refresh their access token
+  },
+  {
+    name: expressValidationHandler,
+    purpose: Returns structured and formatted validation errors and information if a requesting user failed validation. It also attaches the validated fields to the request object if all validation were passed
+  },
+],
+
+apiPayloads: {
+  Profile: {
+    _id: string,
+    fullname: string,
+    email: string,
+    credits: number,
+    plan: starter or pro or enterprise,
+    role: creator or admin or user,
+    createdAt: string,
+    updatedAt: string,
+  },
+
+  AuthState: {
+    userId: string,
+    fullname: string,
+    role: starter or pro or enterprise,
+  },
+
+  AnalysisDetail: {
+    _id: string,
+    endpoint: string,
+    method: GET or POST or PUT or PATCH or DELETE,
+    status: number,
+    aiSummary: string,
+    cost: number,
+    createdAt: string,
+  },
+},
+
+
+
