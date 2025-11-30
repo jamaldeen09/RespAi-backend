@@ -9,4 +9,5 @@ export interface EnvData {
     GOOGLE_CLIENT_SECRET: string;
     OPENAI_API_KEY: string;
     FRONTEND_URL: string;
+    GOOGLE_CALLBACK_URL: string;
 };

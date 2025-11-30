@@ -15,4 +15,5 @@ export const envData: EnvData = {
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET!,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY!,
     FRONTEND_URL: process.env.FRONTEND_URL!,
+    GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL!,
 }
