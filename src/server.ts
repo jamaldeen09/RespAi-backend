@@ -11,7 +11,8 @@ import { envData } from "./config/env.config.js";
 const app = express();
 
 // ** Allowed origins ** \\
-let allowedOrigins = [envData.FRONTEND_URL, "http://localhost:3000"];
+let allowedOrigins = [envData.FRONTEND_URL];
+
 
 // ** Global middlewares ** \\
 app.use(express.json());
